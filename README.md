@@ -97,16 +97,18 @@ python simulate.py
 
 The mass-spring-damper system is governed by Newton's second law:
 
-$$m \ddot{x} + c \dot{x} + k x = F$$
+```
+m·ẍ + c·ẋ + k·x = F
+```
 
 where:
-- $m$ = mass (kg)
-- $c$ = damping coefficient (N·s/m)
-- $k$ = spring stiffness (N/m)
-- $x$ = position of the mass (m)
-- $\dot{x}$ = velocity (m/s)
-- $\ddot{x}$ = acceleration (m/s²)
-- $F$ = applied force (N)
+- m = mass (kg)
+- c = damping coefficient (N·s/m)
+- k = spring stiffness (N/m)
+- x = position of the mass (m)
+- ẋ = velocity (m/s)
+- ẍ = acceleration (m/s²)
+- F = applied force (N)
 
 ### State-Space Representation
 
@@ -131,9 +133,10 @@ u = F  (applied force)
 
 **Continuous-time state-space representation:**
 
-$$\dot{\mathbf{x}} = A\mathbf{x} + Bu$$
-
-$$\mathbf{y} = C\mathbf{x} + Du$$
+```
+ẋ = A·x + B·u
+y = C·x + D·u
+```
 
 **System matrices:**
 
@@ -160,10 +163,10 @@ D = [ 0 ]
 ```
 
 **Interpretation:**
-- $A$ represents the natural system dynamics (gravity, damping, spring restoring force)
-- $B$ is the control input matrix (how force affects acceleration)
-- $C$ is the output matrix (we measure position)
-- $D$ is the feedthrough matrix (typically zero for mechanical systems)
+- A represents the natural system dynamics (gravity, damping, spring restoring force)
+- B is the control input matrix (how force affects acceleration)
+- C is the output matrix (we measure position)
+- D is the feedthrough matrix (typically zero for mechanical systems)
 
 ---
 
@@ -178,25 +181,28 @@ MPC works with discrete-time systems because:
 
 ### Zero-Order Hold (ZOH) Method
 
-We discretize the continuous system using the Zero-Order Hold method, which assumes the control input is held constant over the time interval $[t_k, t_{k+1}]$.
+We discretize the continuous system using the Zero-Order Hold method, which assumes the control input is held constant over the time interval [t_k, t_{k+1}].
 
-For a sampling time $\Delta t$ (time step), the discretized system is:
+For a sampling time Δt (time step), the discretized system is:
 
-$$\mathbf{x}_{k+1} = A_d \mathbf{x}_k + B_d u_k$$
-
-$$\mathbf{y}_k = C_d \mathbf{x}_k + D_d u_k$$
+```
+x_{k+1} = A_d x_k + B_d u_k
+y_k = C_d x_k + D_d u_k
+```
 
 **Discretized system matrices:**
 
-$$A_d = e^{A\Delta t}$$
+```
+A_d = e^(A·Δt)
 
-$$B_d = \int_0^{\Delta t} e^{A\tau} d\tau \cdot B$$
+B_d = ∫₀^Δt e^(A·τ) dτ · B
+```
 
-The implementation uses `scipy.signal.cont2discrete()` with `method='zoh'` to compute $A_d$ and $B_d$ automatically.
+The implementation uses `scipy.signal.cont2discrete()` with `method='zoh'` to compute A_d and B_d automatically.
 
 ### Discretization Example
 
-For a system with $\Delta t = 0.1$ s, the continuous-time evolution is approximated by discrete jumps at $t = 0, 0.1, 0.2, ...$ seconds.
+For a system with Δt = 0.1 s, the continuous-time evolution is approximated by discrete jumps at t = 0, 0.1, 0.2, ... seconds.
 
 ---
 
@@ -204,21 +210,21 @@ For a system with $\Delta t = 0.1$ s, the continuous-time evolution is approxima
 
 ### Receding Horizon Concept
 
-MPC solves an optimization problem over a finite prediction horizon $N$ at each time step:
+MPC solves an optimization problem over a finite prediction horizon N at each time step:
 
-1. **Measure** the current state $\mathbf{x}_0$ at time $k$
-2. **Predict** future states $\mathbf{x}_1, ..., \mathbf{x}_N$ based on candidate control inputs
-3. **Optimize** control inputs $u_0, ..., u_{N-1}$ to minimize a cost function
-4. **Apply** only the first optimal input $u_0$
+1. **Measure** the current state x₀ at time k
+2. **Predict** future states x₁, ..., x_N based on candidate control inputs
+3. **Optimize** control inputs u₀, ..., u_{N-1} to minimize a cost function
+4. **Apply** only the first optimal input u₀
 5. **Shift** forward one time step and repeat
 
 ### Optimization Horizon
 
-Define the prediction horizon: $N$ steps into the future
+Define the prediction horizon: N steps into the future
 
-**Optimization variables:** $(3N + 2)$ variables total
-- States: $2(N+1)$ variables (position and velocity at steps $0, 1, ..., N$)
-- Inputs: $N$ variables (forces at steps $0, 1, ..., N-1$)
+**Optimization variables:** (3N + 2) variables total
+- States: 2(N+1) variables (position and velocity at steps 0, 1, ..., N)
+- Inputs: N variables (forces at steps 0, 1, ..., N-1)
 
 Stack the optimization variable:
 
@@ -239,13 +245,15 @@ z ∈ ℝ^(3N+2)
 
 The MPC objective minimizes tracking error and control effort:
 
-$$J = \sum_{k=0}^{N-1} \left( \|\mathbf{x}_k - \mathbf{r}\|_Q^2 + \|u_k\|_R^2 \right) + \|\mathbf{x}_N - \mathbf{r}\|_Q^2$$
+```
+J = Σ(k=0 to N-1) [ ||x_k - r||²_Q + ||u_k||²_R ] + ||x_N - r||²_Q
+```
 
 where:
-- $\mathbf{r}$ = reference trajectory (desired state)
-- $Q$ = state cost matrix (penalizes deviations from reference)
-- $R$ = input cost matrix (penalizes large control inputs)
-- $\|\mathbf{v}\|_M^2 = \mathbf{v}^T M \mathbf{v}$ = weighted squared norm
+- r = reference trajectory (desired state)
+- Q = state cost matrix (penalizes deviations from reference)
+- R = input cost matrix (penalizes large control inputs)
+- ||v||²_M = v^T M v = weighted squared norm (Euclidean norm scaled by matrix M)
 
 **Typical weight matrices:**
 
@@ -270,17 +278,17 @@ where R_f is the input (force) weight. Example: R = [0.01] penalizes large force
 
 We reformulate the MPC problem into a convex quadratic program (QP) suitable for the OSQP solver:
 
-$$\begin{split}
-\text{minimize} &\quad \frac{1}{2} z^T P z + q^T z \\
-\text{subject to} &\quad l \leq Az \leq u
-\end{split}$$
+```
+minimize:   (1/2) z^T P z + q^T z
+subject to: l ≤ A z ≤ u
+```
 
 where:
-- $z \in \mathbb{R}^{3N+2}$ = optimization variable
-- $P \in \mathbb{R}^{(3N+2) \times (3N+2)}$ = positive semidefinite Hessian matrix
-- $q \in \mathbb{R}^{3N+2}$ = linear cost vector
-- $A \in \mathbb{R}^{m \times (3N+2)}$ = constraint matrix
-- $l, u \in \mathbb{R}^m$ = lower and upper constraint bounds
+- z ∈ ℝ^(3N+2) = optimization variable
+- P ∈ ℝ^((3N+2)×(3N+2)) = positive semidefinite Hessian matrix
+- q ∈ ℝ^(3N+2) = linear cost vector
+- A ∈ ℝ^(m×(3N+2)) = constraint matrix
+- l, u ∈ ℝ^m = lower and upper constraint bounds
 
 ### Quadratic Cost Term
 
@@ -307,9 +315,9 @@ where r is the reference trajectory (desired state).
 
 ### System Dynamics Constraints
 
-The dynamics $\mathbf{x}_{k+1} = A_d \mathbf{x}_k + B_d u_k$ must be satisfied for all $k = 0, ..., N-1$.
+The dynamics x_{k+1} = A_d x_k + B_d u_k must be satisfied for all k = 0, ..., N-1.
 
-Rearranging: $\mathbf{x}_{k+1} - A_d \mathbf{x}_k - B_d u_k = 0$
+Rearranging: x_{k+1} - A_d x_k - B_d u_k = 0
 
 In matrix form (A_eq · z = b_eq):
 ```
@@ -329,9 +337,10 @@ These are **equality constraints** (l_eq = u_eq = b_eq).
 
 Each state and input is constrained:
 
-$$x_{\min} \leq x_k \leq x_{\max}, \quad k = 0, ..., N$$
-
-$$u_{\min} \leq u_k \leq u_{\max}, \quad k = 0, ..., N-1$$
+```
+x_min ≤ x_k ≤ x_max,    for k = 0, ..., N
+u_min ≤ u_k ≤ u_max,    for k = 0, ..., N-1
+```
 
 In matrix form (l ≤ A_ineq · z ≤ u):
 
@@ -364,10 +373,10 @@ where:
 
 The OSQP solver efficiently solves this QP in real-time:
 
-1. Takes $P$, $q$, $A$, $l$, $u$ as inputs
-2. Solves for optimal $z^*$
+1. Takes P, q, A, l, u as inputs
+2. Solves for optimal z*
 3. Returns optimal state and input trajectories
-4. We apply only the first input: $u^*_0$
+4. We apply only the first input: u*₀
 
 ---
 
@@ -386,17 +395,17 @@ mass-spring-damper-mpc/
 
 **[model.py](model.py)**
 - `MassSpringDamperModel` class: Defines system dynamics
-- `state_space_representation()`: Generates continuous-time matrices $A, B, C, D$
-- `get_discrete_state_space()`: Discretizes to $A_d, B_d$ using ZOH
+- `state_space_representation()`: Generates continuous-time matrices A, B, C, D
+- `get_discrete_state_space()`: Discretizes to A_d, B_d using ZOH
 - `simulate_one_step()`: Advances system by one time step
 - `simulate()`: Runs open-loop simulation
 - `plot_response()`: Visualizes position, velocity, and input
 
 **[model_predictive_controller.py](model_predictive_controller.py)**
 - `ModelPredictiveController` class: Implements MPC algorithm
-- `set_state_bounds()`: Defines $x_{\min}, x_{\max}$
-- `set_input_bounds()`: Defines $u_{\min}, u_{\max}$
-- `setup_optimization_problem()`: Constructs $P, q, A, l, u$ matrices
+- `set_state_bounds()`: Defines x_min, x_max
+- `set_input_bounds()`: Defines u_min, u_max
+- `setup_optimization_problem()`: Constructs P, q, A, l, u matrices
 - `get_mpc_object()`: Returns ready-to-solve OSQP problem instance
 
 **[simulate.py](simulate.py)**
@@ -456,8 +465,8 @@ Q = np.diag([100.0, 1.0])   # State cost: [position, velocity]
 R = np.diag([0.01])         # Input cost: [force]
 ```
 
-- **Increase $Q$**: Prioritize tracking accuracy
-- **Increase $R$**: Reduce control effort, smoother inputs
+- **Increase Q**: Prioritize tracking accuracy
+- **Increase R**: Reduce control effort, smoother inputs
 - **Position weight (100.0)** > **Velocity weight (1.0)**: Emphasize position control
 
 ### Constraints
@@ -473,7 +482,7 @@ mpc.set_state_bounds(xmin=np.array([-np.inf, 0.0]),
 - **Input bounds**: Physical actuator limits
 - **Position bounds**: Workspace constraints (e.g., mechanical stops)
 - **Velocity bounds**: Safety or physical constraints
-- **Set to $\pm\infty$**: No constraint on that variable
+- **Set to ±infinity**: No constraint on that variable
 
 ---
 
@@ -485,11 +494,11 @@ At each time step, MPC optimizes over a finite horizon and applies only the firs
 
 ### Stability
 
-Terminal cost term ($Q_N$) at the final prediction step improves closed-loop stability. This penalizes final state deviation more heavily.
+Terminal cost term (Q_N) at the final prediction step improves closed-loop stability. This penalizes final state deviation more heavily.
 
 ### Real-Time Implementation
 
-The OSQP solver is fast enough for real-time MPC on typical embedded systems. Computation time scales with horizon length $N$ and constraint count.
+The OSQP solver is fast enough for real-time MPC on typical embedded systems. Computation time scales with horizon length N and constraint count.
 
 ### Soft vs. Hard Constraints
 
