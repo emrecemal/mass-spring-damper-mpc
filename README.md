@@ -113,14 +113,21 @@ where:
 To apply control theory, we convert the second-order differential equation into a first-order system using state variables.
 
 **State vector definition:**
-$$\mathbf{x} = \begin{bmatrix} x \\ \dot{x} \end{bmatrix}$$
+
+```
+     [ x   ]     position
+x =  [ ẋ   ]  =  velocity
+```
 
 where:
-- $x_1 = x$ is the position
-- $x_2 = \dot{x}$ is the velocity
+- x₁ = x is the position
+- x₂ = ẋ is the velocity
 
 **Input:**
-$$u = F$$
+
+```
+u = F  (applied force)
+```
 
 **Continuous-time state-space representation:**
 
@@ -130,9 +137,27 @@ $$\mathbf{y} = C\mathbf{x} + Du$$
 
 **System matrices:**
 
-$$A = \begin{bmatrix} 0 & 1 \\ -\frac{k}{m} & -\frac{c}{m} \end{bmatrix} \quad B = \begin{bmatrix} 0 \\ \frac{1}{m} \end{bmatrix}$$
+**State matrix (A):**
+```
+     [  0      1   ]
+A =  [ -k/m  -c/m ]
+```
 
-$$C = \begin{bmatrix} 1 & 0 \end{bmatrix} \quad D = \begin{bmatrix} 0 \end{bmatrix}$$
+**Input matrix (B):**
+```
+     [ 0   ]
+B =  [1/m ]
+```
+
+**Output matrix (C):**
+```
+C = [ 1  0 ]
+```
+
+**Feedthrough matrix (D):**
+```
+D = [ 0 ]
+```
 
 **Interpretation:**
 - $A$ represents the natural system dynamics (gravity, damping, spring restoring force)
@@ -196,7 +221,19 @@ Define the prediction horizon: $N$ steps into the future
 - Inputs: $N$ variables (forces at steps $0, 1, ..., N-1$)
 
 Stack the optimization variable:
-$$z = \begin{bmatrix} \mathbf{x}_0 \\ \mathbf{x}_1 \\ \vdots \\ \mathbf{x}_N \\ u_0 \\ u_1 \\ \vdots \\ u_{N-1} \end{bmatrix} \in \mathbb{R}^{3N+2}$$
+
+```
+z = [ x₀      ]  ← Initial state
+    [ x₁      ]  ← Predicted state 1
+    [ ...     ]  ← ...
+    [ x_N     ]  ← Predicted state N
+    [ u₀      ]  ← Control input 0
+    [ u₁      ]  ← Control input 1
+    [ ...     ]  ← ...
+    [ u_{N-1} ]  ← Control input N-1
+
+z ∈ ℝ^(3N+2)
+```
 
 ### Cost Function
 
@@ -212,13 +249,18 @@ where:
 
 **Typical weight matrices:**
 
-$$Q = \begin{bmatrix} Q_x & 0 \\ 0 & Q_v \end{bmatrix}$$
+**State cost matrix (Q):**
+```
+     [ Q_x    0  ]
+Q =  [  0   Q_v ]
+```
+where Q_x is the position weight and Q_v is the velocity weight. Example: Q = diag(100, 1) prioritizes position tracking.
 
-where $Q_x$ is the position weight and $Q_v$ is the velocity weight. For example: $Q = \text{diag}(100, 1)$ prioritizes position tracking.
-
-$$R = [R_f]$$
-
-where $R_f$ is the input (force) weight. For example: $R = [0.01]$ penalizes large forces.
+**Input cost matrix (R):**
+```
+R = [ R_f ]
+```
+where R_f is the input (force) weight. Example: R = [0.01] penalizes large forces.
 
 ---
 
@@ -244,22 +286,24 @@ where:
 
 From the MPC cost function, the Hessian and linear cost are:
 
-$$P = \begin{bmatrix}
-Q & 0 & 0 \\
-0 & \ddots & 0 \\
-0 & 0 & R
-\end{bmatrix} = \text{block-diag}(Q, ..., Q, Q_N, R, ..., R)$$
+**Hessian matrix (P):** Block-diagonal structure
+```
+P = block-diag(Q, Q, ..., Q, Q_N, R, R, ..., R)
+        └─ N times ─┘  └─ terminal ─┘  └─ N times ─┘
+```
+where Q_N is the terminal cost (higher penalty on final state).
 
-$$q = \begin{bmatrix}
--Q\mathbf{r} \\
-\vdots \\
--Q_N\mathbf{r} \\
-0 \\
-\vdots \\
-0
-\end{bmatrix}$$
-
-where $Q_N$ is the terminal cost (final state penalty).
+**Linear cost vector (q):**
+```
+q = [ -Q·r      ]  ← Cost for state 0
+    [ -Q·r      ]  ← Cost for state 1
+    [ ...       ]
+    [ -Q_N·r    ]  ← Terminal cost
+    [ 0         ]  ← No cost for inputs
+    [ ...       ]
+    [ 0         ]
+```
+where r is the reference trajectory (desired state).
 
 ### System Dynamics Constraints
 
@@ -267,16 +311,19 @@ The dynamics $\mathbf{x}_{k+1} = A_d \mathbf{x}_k + B_d u_k$ must be satisfied f
 
 Rearranging: $\mathbf{x}_{k+1} - A_d \mathbf{x}_k - B_d u_k = 0$
 
-In matrix form:
-$$\begin{bmatrix}
--I & 0 & 0 & 0 & \cdots & B_d \\
-A_d & -I & 0 & 0 & \cdots & 0 \\
-0 & A_d & -I & 0 & \cdots & 0 \\
-\vdots & & \ddots & \ddots & & \vdots \\
-0 & 0 & \cdots & A_d & -I & 0
-\end{bmatrix} z = \begin{bmatrix} -\mathbf{x}_0 \\ 0 \\ 0 \\ \vdots \\ 0 \end{bmatrix}$$
+In matrix form (A_eq · z = b_eq):
+```
+[ -I      0      0    ...   B_d ] [ x₀     ]   [ -x₀ ]
+[ A_d    -I      0    ...    0  ] [ x₁     ]   [  0  ]
+[  0     A_d    -I    ...    0  ] [ x₂     ] = [  0  ]
+[ ...            ...              ] [ ...    ]   [ ... ]
+[  0      0      0   A_d    -I  ] [ x_N    ]   [  0  ]
+                                   [ u₀,u₁,...]
+```
 
-These are **equality constraints** ($l_{eq} = u_{eq}$).
+These are **equality constraints** (l_eq = u_eq = b_eq).
+
+**Physical meaning:** Each constraint enforces the state transition equation x_{k+1} = A_d·x_k + B_d·u_k
 
 ### State and Input Bound Constraints
 
@@ -286,28 +333,32 @@ $$x_{\min} \leq x_k \leq x_{\max}, \quad k = 0, ..., N$$
 
 $$u_{\min} \leq u_k \leq u_{\max}, \quad k = 0, ..., N-1$$
 
-In matrix form:
-$$\begin{bmatrix}
-I & 0 \\
-0 & I
-\end{bmatrix} z \leq \begin{bmatrix}
-x_{\max} \\ u_{\max}
-\end{bmatrix}$$
+In matrix form (l ≤ A_ineq · z ≤ u):
 
-$$\begin{bmatrix}
-I & 0 \\
-0 & I
-\end{bmatrix} z \geq \begin{bmatrix}
-x_{\min} \\ u_{\min}
-\end{bmatrix}$$
+```
+[ I  0 ] [ x₀,x₁,...,x_N ]   [ x_min ]       [ x_max ]
+[     ] [ u₀,u₁,...,u_N-1] ≤ [  ...  ] ≤ ... [  ...  ]
+[ 0  I ]                      [ u_min ]       [ u_max ]
+```
 
-These are **inequality constraints** expressed as $l \leq Az \leq u$.
+These are **inequality constraints** enforcing:
+- x_min ≤ x_k ≤ x_max for all k (state bounds)
+- u_min ≤ u_k ≤ u_max for all k (input bounds)
 
 ### Combined Constraint Matrix
 
 The full constraint matrix combines dynamics (equality) and bounds (inequality):
 
-$$\text{All constraints} = \begin{bmatrix} A_{eq} \\ A_{ineq} \end{bmatrix}, \quad \text{bounds} = \begin{bmatrix} l_{eq} \leq A_{eq}z \leq u_{eq} \\ l_{ineq} \leq A_{ineq}z \leq u_{ineq} \end{bmatrix}$$
+```
+A = [ A_eq   ]    l = [ l_eq   ]    u = [ u_eq   ]
+    [ A_ineq ]        [ l_ineq ]        [ u_ineq ]
+
+So: l ≤ A·z ≤ u
+```
+
+where:
+- A_eq enforces system dynamics
+- A_ineq enforces state/input bounds
 
 ### Solving with OSQP
 
